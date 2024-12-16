@@ -34,7 +34,6 @@ def save_model(model, filename):
 def load_data(file):
     return pd.read_csv(file)
 
-@st.cache_data
 def train_model(model, X_train, y_train):
     model.fit(X_train, y_train)
     return model
