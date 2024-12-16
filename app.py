@@ -1,70 +1,82 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.svm import SVC
+from sklearn.metrics import accuracy_score, classification_report
+from sklearn.preprocessing import LabelEncoder, StandardScaler
 
-# Configuración de la página
-st.set_page_config(page_title="EDA Básico", layout="wide")
+# Configurar página
+st.set_page_config(page_title="ML Básico con Streamlit", layout="wide")
+st.title("Entrenamiento de Modelos de Machine Learning")
 
-# Título de la aplicación
-st.title("Análisis Exploratorio de Datos (EDA) Básico")
-
-# Subida de archivo CSV
-st.sidebar.header("Sube tu archivo de datos")
-uploaded_file = st.sidebar.file_uploader("Sube un archivo CSV", type=["csv", "xlsx"])
+# Subida de archivo
+st.sidebar.header("Sube tu archivo CSV")
+uploaded_file = st.sidebar.file_uploader("Sube un archivo CSV", type=["csv"])
 
 if uploaded_file is not None:
-    # Cargar el archivo en un DataFrame
-    try:
-        if uploaded_file.name.endswith('.csv'):
-            df = pd.read_csv(uploaded_file)
-        elif uploaded_file.name.endswith('.xlsx'):
-            df = pd.read_excel(uploaded_file)
+    df = pd.read_csv(uploaded_file)
+    st.write("### Vista previa del dataset")
+    st.dataframe(df.head())
+
+    # Seleccionar variable objetivo
+    st.sidebar.subheader("Configuración del modelo")
+    target = st.sidebar.selectbox("Selecciona la variable objetivo", df.columns)
+
+    # Preprocesamiento de datos
+    st.write("### Información básica")
+    st.write("**Valores nulos:**")
+    st.dataframe(df.isnull().sum())
+
+    # Preprocesamiento: Eliminar filas nulas
+    df = df.dropna()
+
+    # Separar X y y
+    X = df.drop(columns=[target])
+    y = df[target]
+
+    # Codificar variables categóricas si es necesario
+    le = LabelEncoder()
+    y = le.fit_transform(y)
+
+    # Escalar variables numéricas
+    scaler = StandardScaler()
+    X = pd.get_dummies(X)  # Convertir variables categóricas a dummies
+    X_scaled = scaler.fit_transform(X)
+
+    # Dividir en entrenamiento y prueba
+    X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
+
+    st.write("**Tamaño de los datos de entrenamiento y prueba:**")
+    st.write(f"Entrenamiento: {X_train.shape}, Prueba: {X_test.shape}")
+
+    # Elegir modelo
+    model_option = st.sidebar.selectbox("Selecciona un modelo", 
+                                        ["Random Forest", "Logistic Regression", "SVM"])
+
+    if st.sidebar.button("Entrenar Modelo"):
+        st.write(f"### Modelo seleccionado: {model_option}")
         
-        st.success("Datos cargados correctamente 🎉")
-        
-        # Mostrar las primeras filas
-        st.subheader("Vista previa de los datos")
-        st.dataframe(df.head())
+        if model_option == "Random Forest":
+            model = RandomForestClassifier()
+        elif model_option == "Logistic Regression":
+            model = LogisticRegression()
+        elif model_option == "SVM":
+            model = SVC()
 
-        # Mostrar información básica del DataFrame
-        st.subheader("Información de los datos")
-        st.write(f"**Número de filas:** {df.shape[0]}  |  **Número de columnas:** {df.shape[1]}")
-        st.write("**Tipos de datos:**")
-        st.dataframe(df.dtypes)
+        # Entrenar modelo
+        model.fit(X_train, y_train)
+        y_pred = model.predict(X_test)
 
-        # Valores nulos
-        st.subheader("Valores nulos")
-        st.write("Número de valores nulos por columna:")
-        st.dataframe(df.isnull().sum())
+        # Evaluación del modelo
+        acc = accuracy_score(y_test, y_pred)
+        st.write(f"**Precisión del modelo:** {acc:.2f}")
 
-        # Estadísticas descriptivas
-        st.subheader("Estadísticas descriptivas")
-        st.write("Resumen estadístico de las variables numéricas:")
-        st.dataframe(df.describe())
+        st.write("### Reporte de Clasificación")
+        st.text(classification_report(y_test, y_pred))
 
-        # Visualización de datos
-        st.subheader("Distribución de las variables numéricas")
-        numeric_columns = df.select_dtypes(include='number').columns
-        for col in numeric_columns:
-            st.write(f"**Distribución de '{col}':**")
-            fig, ax = plt.subplots()
-            sns.histplot(df[col], kde=True, color="blue", ax=ax)
-            st.pyplot(fig)
-
-        # Mapa de calor de correlación
-        st.subheader("Mapa de calor de correlación")
-        if len(numeric_columns) > 1:
-            fig, ax = plt.subplots(figsize=(10, 6))
-            sns.heatmap(df[numeric_columns].corr(), annot=True, cmap="coolwarm", ax=ax)
-            st.pyplot(fig)
-        else:
-            st.warning("Se necesitan al menos dos columnas numéricas para calcular la correlación.")
-
-    except Exception as e:
-        st.error(f"Error al procesar el archivo: {e}")
 else:
-    st.info("Por favor, sube un archivo CSV o Excel para analizar los datos.")
+    st.info("Sube un archivo CSV para entrenar modelos de Machine Learning.")
 
-# Nota final
-st.sidebar.info("Esta aplicación permite cargar y analizar datos rápidamente con EDA básico.")
