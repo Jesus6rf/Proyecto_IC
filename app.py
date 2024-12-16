@@ -3,19 +3,17 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-import plotly.express as px
-import plotly.graph_objects as go
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, roc_auc_score, roc_curve
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 import joblib
 import os
 
 # Configuración inicial
-st.set_page_config(page_title="EDA, ML y Comparación", layout="wide")
+st.set_page_config(page_title="Modelos de ML y Optimización", layout="wide")
 st.title("Análisis y Entrenamiento de Modelos para Predicción")
 
 # Función para guardar modelos
@@ -30,65 +28,33 @@ def save_model(model, filename):
         )
     os.remove(filename)
 
-@st.cache_data
-def load_data(file):
-    return pd.read_csv(file)
-
-def train_model(model, X_train, y_train):
-    model.fit(X_train, y_train)
-    return model
-
 # Subida de archivo
 st.sidebar.header("Sube tu archivo CSV")
 uploaded_file = st.sidebar.file_uploader("Selecciona un archivo CSV", type=["csv"])
 
-# Menú principal
-menu = st.sidebar.radio("Selecciona una sección", ["Análisis EDA", "Modelos de Machine Learning", 
-                                                   "Comparación de Modelos", "Optimización de Hiperparámetros"])
-
-# Función para matriz de confusión
-def plot_confusion_matrix(y_test, y_pred, labels):
-    cm = confusion_matrix(y_test, y_pred)
-    fig = px.imshow(cm, labels=dict(x="Predicho", y="Real"), x=labels, y=labels, color_continuous_scale="Blues")
-    st.plotly_chart(fig)
-
 if uploaded_file is not None:
-    df = load_data(uploaded_file)
+    df = pd.read_csv(uploaded_file)
+    st.sidebar.subheader("Opciones de Modelos")
+    target = st.sidebar.selectbox("Selecciona la variable objetivo", df.columns)
 
-    # Análisis EDA
-    if menu == "Análisis EDA":
-        st.subheader("Análisis Exploratorio de Datos")
-        st.dataframe(df.head())
-        st.write("**Valores nulos:**")
-        st.dataframe(df.isnull().sum())
-        st.write("**Estadísticas:**")
-        st.dataframe(df.describe())
+    if target:
+        # Preprocesamiento
+        df = df.dropna()
+        X = pd.get_dummies(df.drop(columns=[target]))
+        y = LabelEncoder().fit_transform(df[target])
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-        # Visualización interactiva con Plotly
-        st.write("### Visualización de datos")
-        column = st.selectbox("Selecciona una columna numérica", df.select_dtypes(include=np.number).columns)
-        fig = px.histogram(df, x=column, title=f"Distribución de {column}")
-        st.plotly_chart(fig)
+        # Submenú para elegir tipo de análisis
+        model_menu = st.sidebar.radio("Elige una opción", ["Entrenamiento Estándar", "Optimización de Hiperparámetros"])
 
-        # Correlación
-        st.write("### Mapa de calor de correlación:")
-        corr = df.select_dtypes(include=np.number).corr()
-        fig, ax = plt.subplots(figsize=(10, 6))
-        sns.heatmap(corr, annot=True, cmap="coolwarm", ax=ax)
-        st.pyplot(fig)
+        # Selección de modelos
+        model_option = st.sidebar.selectbox("Selecciona un modelo", ["Random Forest", "Regresión Logística", "SVM"])
 
-    # Modelos de Machine Learning
-    elif menu == "Modelos de Machine Learning":
-        st.subheader("Entrenamiento de Modelos")
-        target = st.sidebar.selectbox("Selecciona la variable objetivo", df.columns)
-
-        if target:
-            X = pd.get_dummies(df.drop(columns=[target]))
-            y = LabelEncoder().fit_transform(df[target])
-            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-            model_option = st.sidebar.selectbox("Selecciona un modelo", ["Random Forest", "Regresión Logística", "SVM"])
+        if model_menu == "Entrenamiento Estándar":
+            st.subheader("Entrenamiento de Modelo")
             params = {}
+
+            # Parámetros ajustables
             if model_option == "Random Forest":
                 params["n_estimators"] = st.sidebar.slider("n_estimators", 10, 200, 50)
                 model = RandomForestClassifier(**params)
@@ -99,44 +65,65 @@ if uploaded_file is not None:
                 model = SVC(**params)
 
             if st.sidebar.button("Entrenar Modelo"):
-                model = train_model(model, X_train, y_train)
+                model.fit(X_train, y_train)
                 y_pred = model.predict(X_test)
                 acc = accuracy_score(y_test, y_pred)
-                st.write(f"**Precisión:** {acc:.2f}")
 
+                st.write(f"**Precisión del Modelo:** {acc:.2f}")
                 st.write("### Reporte de Clasificación:")
                 report = pd.DataFrame(classification_report(y_test, y_pred, output_dict=True)).transpose()
                 st.dataframe(report)
 
-                # Matriz de confusión
+                # Matriz de Confusión
                 st.write("### Matriz de Confusión:")
-                plot_confusion_matrix(y_test, y_pred, labels=np.unique(df[target]))
+                cm = confusion_matrix(y_test, y_pred)
+                fig, ax = plt.subplots()
+                sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax)
+                st.pyplot(fig)
 
                 # Descargar modelo
                 save_model(model, f"{model_option.replace(' ', '_')}.pkl")
 
-    # Comparación de Modelos
-    elif menu == "Comparación de Modelos":
-        st.subheader("Comparación de Modelos")
-        target = st.sidebar.selectbox("Selecciona la variable objetivo", df.columns)
-        X = pd.get_dummies(df.drop(columns=[target]))
-        y = LabelEncoder().fit_transform(df[target])
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        elif model_menu == "Optimización de Hiperparámetros":
+            st.subheader("Optimización de Hiperparámetros con GridSearchCV")
+            if model_option == "Random Forest":
+                param_grid = {
+                    "n_estimators": [10, 50, 100, 200],
+                    "max_depth": [None, 10, 20]
+                }
+                model = GridSearchCV(RandomForestClassifier(), param_grid, cv=3)
 
-        models = {"Random Forest": RandomForestClassifier(), 
-                  "Regresión Logística": LogisticRegression(), 
-                  "SVM": SVC()}
-        results = {}
-        for name, model in models.items():
-            model = train_model(model, X_train, y_train)
-            y_pred = model.predict(X_test)
-            results[name] = accuracy_score(y_test, y_pred)
+            elif model_option == "SVM":
+                param_grid = {
+                    "C": [0.1, 1, 10],
+                    "kernel": ["linear", "rbf"]
+                }
+                model = GridSearchCV(SVC(), param_grid, cv=3)
 
-        results_df = pd.DataFrame(results.items(), columns=["Modelo", "Precisión"])
-        st.dataframe(results_df)
+            else:
+                st.warning("Optimización no disponible para este modelo.")
+                model = None
 
-        st.write("### Comparación de precisión:")
-        fig = px.bar(results_df, x="Modelo", y="Precisión", color="Modelo", text="Precisión")
-        st.plotly_chart(fig)
+            if model:
+                if st.sidebar.button("Optimizar Modelo"):
+                    with st.spinner("Optimizando..."):
+                        model.fit(X_train, y_train)
+                    st.success("Optimización completada!")
+
+                    st.write("### Mejores Hiperparámetros:")
+                    st.json(model.best_params_)
+
+                    # Evaluación del modelo optimizado
+                    y_pred = model.best_estimator_.predict(X_test)
+                    acc = accuracy_score(y_test, y_pred)
+                    st.write(f"**Precisión del Modelo Optimizado:** {acc:.2f}")
+
+                    # Reporte
+                    st.write("### Reporte de Clasificación:")
+                    report = pd.DataFrame(classification_report(y_test, y_pred, output_dict=True)).transpose()
+                    st.dataframe(report)
+
+                    # Descargar modelo optimizado
+                    save_model(model.best_estimator_, f"{model_option.replace(' ', '_')}_Optimizado.pkl")
 else:
     st.info("Por favor, sube un archivo CSV para comenzar.")
