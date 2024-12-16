@@ -105,9 +105,12 @@ if uploaded_file is not None:
                 st.write(f"### Resultados del Modelo: **{model_option}**")
                 st.write(f"**Precisión del modelo:** {acc:.2f}")
 
+                # Mostrar reporte de clasificación en formato de tabla
                 st.write("### Reporte de Clasificación:")
-                st.text(classification_report(y_test, y_pred))
-
+                report = classification_report(y_test, y_pred, output_dict=True)
+                report_df = pd.DataFrame(report).transpose()
+                st.dataframe(report_df.style.format({"precision": "{:.2f}", 
+                                                     "recall": "{:.2f}", 
+                                                     "f1-score": "{:.2f}"}))
 else:
     st.info("Por favor, sube un archivo CSV para comenzar.")
-
